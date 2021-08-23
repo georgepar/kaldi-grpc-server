@@ -70,3 +70,16 @@ docker run -ti -p 50051:50051 $CONTAINER_TAG
 python kaldigrpc/client.py --streaming --host localhost --port 50051 mytest.wav
 ```
 
+
+### RNNLM Rescoring
+
+TODO: Write documentation
+
+
+### Roadmap
+
+- Add support for mixed kaldi and pytorch acoustic / language models
+- Add full support for pause detection (interim results)
+- Add load balancer / benchmarks
+- Streamined conversion scripts from exp folder to model tarball
+- Support all Speech API configuration options
