@@ -1,16 +1,32 @@
 import time
+from collections import deque
 from concurrent import futures
+from threading import Lock
 
 import grpc
-from loguru import logger
-
 import kaldigrpc.generated.asr_pb2 as msg
 import kaldigrpc.generated.asr_pb2_grpc as rpc
-from kaldi.util.options import ParseOptions
 from kaldigrpc.config import AsrConfig
 from kaldigrpc.recognize import KaldiRecognizer
+from loguru import logger
+
+from kaldi.util.options import ParseOptions
 
 _ONE_DAY_IN_SECONDS = 60 * 60 * 24
+
+
+class CircularBuffer(deque):
+    def __init__(self, *args, **kwargs):
+        self.lock = Lock()
+        super(CircularBuffer, self).__init__(*args, **kwargs)
+
+    def round_robin(self):
+        self.lock.acquire()
+        self.rotate(1)
+        obj = self[0]
+        self.lock.release()
+
+        return obj
 
 
 class ILSPASRService(rpc.ILSPASRServicer):
@@ -19,9 +35,13 @@ class ILSPASRService(rpc.ILSPASRServicer):
             raise ValueError(
                 "Expecting an AsrConfig object as a kwarg. Try calling ILSPASRService(asr_config=my_asr_config)"
             )
-        asr_config = kwargs.pop("asr_config")
+        self.asr_config = kwargs.pop("asr_config")
+        self.max_workers = kwargs.pop("max_workers")
+        self.recognizers = CircularBuffer(
+            [KaldiRecognizer(self.asr_config) for _ in range(self.max_workers)],
+            maxlen=self.max_workers,
+        )
         super(ILSPASRService, self).__init__(*args, **kwargs)
-        self.asr = KaldiRecognizer(asr_config)
 
     @classmethod
     def register(cls, po: ParseOptions):
@@ -69,7 +89,8 @@ class ILSPASRService(rpc.ILSPASRServicer):
         print(metadata)
         config = request.config
         print(config)
-        result = self.asr.recognize(request.audio)
+        asr = self.recognizers.round_robin()  # KaldiRecognizer(self.asr_config)
+        result = asr.recognize(request.audio)
 
         res = msg.SpeechRecognitionResult(
             alternatives=self._construct_alternatives(result),
@@ -94,7 +115,9 @@ class ILSPASRService(rpc.ILSPASRServicer):
                 else:
                     yield req.audio_content
 
-        for result in self.asr.recognize_stream(stream()):
+        asr = self.recognizers.round_robin()  # KaldiRecognizer(self.asr_config)
+
+        for result in asr.recognize_stream(stream()):
             res = msg.StreamingRecognitionResult(
                 alternatives=self._construct_alternatives(result),
                 is_final=result.is_final,
@@ -117,7 +140,9 @@ def serve():
     ILSPASRService.register(po)
     config, args = AsrConfig.parse_options(po=po)
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=args.max_workers))
-    rpc.add_ILSPASRServicer_to_server(ILSPASRService(asr_config=config), server)
+    rpc.add_ILSPASRServicer_to_server(
+        ILSPASRService(asr_config=config, max_workers=args.max_workers), server
+    )
 
     if not args.secure:
         server.add_insecure_port(f"{args.host}:{args.port}")
