@@ -55,21 +55,34 @@ The key files / directories are:
 Once you create this model structure, you can use the provided Dockerfile to build the server container. Run:
 
 ```
-bash build_container.sh $MY_MODEL_DIR $CONTAINER_TAG # example: bash build_container.sh /models/kaldi/english_model kaldigrpc:en-latest
+make build-server kaldi_model=$MY_MODEL_DIR image_tag=$CONTAINER_TAG
+# example: make build-server kaldi_model=/models/kaldi/english_model image_tag=kaldigrpc:en-latest
 ```
 
 And you can run the container
 
 ```
-docker run -ti -p 50051:50051 $CONTAINER_TAG
+# Run your container for maximum 3 simultaneous clients on port 1234
+make run-server image_tag=kaldigrpc:en-latest max_workers=3 server_port=1234
+
 ```
 
 ### Client usage
 
+Install client library:
+
 ```
-python kaldigrpc/client.py --streaming --host localhost --port 50051 mytest.wav
+pip install kaldigrpc-client
 ```
 
+Run client from command line:
+
+```
+kaldigrpc-transcribe --streaming --host localhost --port 50051 mytest.wav
+```
+
+
+For more infomation refer to `client/README.md`
 
 ### RNNLM Rescoring
 

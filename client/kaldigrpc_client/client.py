@@ -6,8 +6,8 @@ from typing import Iterator, Optional
 
 import grpc
 
-import kaldigrpc.generated.asr_pb2 as msg
-import kaldigrpc.generated.asr_pb2_grpc as rpc
+import kaldigrpc_client.generated.asr_pb2 as msg
+import kaldigrpc_client.generated.asr_pb2_grpc as rpc
 
 
 class ILSPASRClient:

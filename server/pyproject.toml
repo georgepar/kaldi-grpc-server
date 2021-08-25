@@ -18,7 +18,6 @@ mypy = "^0.910"
 
 [tool.poetry.scripts]
 kaldigrpc-serve = 'kaldigrpc.cli.serve:serve_cli'
-kaldigrpc-transcribe = 'kaldigrpc.cli.client:transcribe_wav_cli'
 kaldigrpc-transcribe-local = 'kaldigrpc.cli.recognize:local_transcribe_wav_cli'
 
 [build-system]

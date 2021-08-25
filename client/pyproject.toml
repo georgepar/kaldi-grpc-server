@@ -1,0 +1,39 @@
+[tool.poetry]
+name = "kaldigrpc_client"
+version = "0.2.0"
+description = "Python client for Kaldi GRPC server"
+license = "MIT"
+repository = "https://github.com/georgepar/kaldi-grpc-server"
+homepage = "https://github.com/georgepar/kaldi-grpc-server"
+keywords = ["speech recognition", "kaldi", "grpc", "asr", "deployment", "streaming speech"]
+readme = "README.md"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Multimedia :: Sound/Audio",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
+authors = ["Giorgos Paraskevopoulos <geopar@central.ntua.gr>"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+grpcio = "^1.39.0"
+grpcio-tools = "^1.39.0"
+pydub = "^0.25.1"
+
+[tool.poetry.dev-dependencies]
+black = "^21.7b0"
+mypy = "^0.910"
+
+[tool.poetry.scripts]
+kaldigrpc-transcribe = 'kaldigrpc_client.client:transcribe_wav'
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
