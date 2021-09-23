@@ -197,7 +197,6 @@ class KaldiRecognizer:
             if num_frames_decoded > prev_num_frames_decoded:
                 prev_num_frames_decoded = num_frames_decoded
                 out = self.asr.get_partial_output()
-                print(out["text"], end="\r")
 
                 transcript = Transcription(
                     out["text"],
