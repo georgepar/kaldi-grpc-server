@@ -1,32 +1,18 @@
 import time
-from collections import deque
 from concurrent import futures
+from queue import Queue
 from threading import Lock
 
 import grpc
-import kaldigrpc.generated.asr_pb2 as msg
-import kaldigrpc.generated.asr_pb2_grpc as rpc
-from kaldigrpc.config import AsrConfig
-from kaldigrpc.recognize import KaldiRecognizer
 from loguru import logger
 
+import kaldigrpc.generated.asr_pb2 as msg
+import kaldigrpc.generated.asr_pb2_grpc as rpc
 from kaldi.util.options import ParseOptions
+from kaldigrpc.config import AsrConfig
+from kaldigrpc.recognize import KaldiRecognizer
 
 _ONE_DAY_IN_SECONDS = 60 * 60 * 24
-
-
-class CircularBuffer(deque):
-    def __init__(self, *args, **kwargs):
-        self.lock = Lock()
-        super(CircularBuffer, self).__init__(*args, **kwargs)
-
-    def round_robin(self):
-        self.lock.acquire()
-        self.rotate(1)
-        obj = self[0]
-        self.lock.release()
-
-        return obj
 
 
 class ILSPASRService(rpc.ILSPASRServicer):
@@ -37,10 +23,10 @@ class ILSPASRService(rpc.ILSPASRServicer):
             )
         self.asr_config = kwargs.pop("asr_config")
         self.max_workers = kwargs.pop("max_workers")
-        self.recognizers = CircularBuffer(
-            [KaldiRecognizer(self.asr_config) for _ in range(self.max_workers)],
-            maxlen=self.max_workers,
-        )
+        self.recognizers = Queue(maxsize=self.max_workers)
+
+        for _ in range(self.max_workers):
+            self.recognizers.put(KaldiRecognizer(self.asr_config))
         super(ILSPASRService, self).__init__(*args, **kwargs)
 
     @classmethod
@@ -115,7 +101,9 @@ class ILSPASRService(rpc.ILSPASRServicer):
                 else:
                     yield req.audio_content
 
-        asr = self.recognizers.round_robin()  # KaldiRecognizer(self.asr_config)
+        asr = self.recognizers.get(
+            block=True, timeout=None
+        )  # Block until a recognizer becomes available
 
         for result in asr.recognize_stream(stream()):
             res = msg.StreamingRecognitionResult(
@@ -128,6 +116,8 @@ class ILSPASRService(rpc.ILSPASRServicer):
             resp = msg.StreamingRecognizeResponse(results=[res])
 
             yield resp
+
+        self.recognizers.put(asr)  # Reinsert into the queue
 
 
 def serve():
