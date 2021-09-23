@@ -1,13 +1,11 @@
 import argparse
-import threading
-import time
-from concurrent import futures
 from typing import Iterator, Optional
 
 import grpc
+from google.protobuf.json_format import MessageToDict
 
-import kaldigrpc_client.generated.asr_pb2 as msg
-import kaldigrpc_client.generated.asr_pb2_grpc as rpc
+from .generated import asr_pb2 as msg
+from .generated import asr_pb2_grpc as rpc
 
 
 class ILSPASRClient:
@@ -17,6 +15,9 @@ class ILSPASRClient:
         port: int = 50051,
         # TODO: Unused args for now. Adding for compatibility with google speech client
         secure: bool = False,
+        chunk_size: int = 200,
+        streaming_output: bool = False,
+        alignment_output: Optional[str] = None,
         encoding: str = "LINEAR16",
         sample_rate_hertz: int = 16000,
         language_code: str = "el-GR",
@@ -45,6 +46,9 @@ class ILSPASRClient:
         self.streaming_config = msg.StreamingRecognitionConfig(
             config=self.recognition_config, interim_results=interim_results
         )
+        self.streaming_output = streaming_output
+        self.alignment_output = alignment_output
+        self.chunk_size = chunk_size
 
         if not secure:
             channel = grpc.insecure_channel(
@@ -100,13 +104,45 @@ class ILSPASRClient:
         snd = AudioSegment.from_file(wav_file)
 
         def wav_iter():
-            for chunk in make_chunks(snd, 100):
+            for chunk in make_chunks(snd, self.chunk_size):
                 yield chunk.raw_data
 
-        for result in self.streaming_recognize(wav_iter()):
-            print(result.results[0].alternatives[0].transcript, end="\r")
-        # Print final result
+        recognizer_outputs = self.streaming_recognize(wav_iter())
+
+        while True:
+            try:
+                result = next(recognizer_outputs)
+
+                if self.streaming_output:
+                    print(result.results[0].alternatives[0].transcript, end="\r")
+
+            except StopIteration:
+                break
+
         print(result.results[0].alternatives[0].transcript)
+
+        if self.alignment_output is not None:
+            self.write_alignments(result)
+
+    def write_alignments(self, result):
+        result_dict = MessageToDict(result)
+
+        word_dict = result_dict["results"][0]["alternatives"][0]["words"]
+
+        for d in word_dict:
+            d["speaker"] = "speakerID"
+            d["speaker_name"] = "Anonymous"
+
+            if "startTime" not in d:
+                d["startTime"] = -1
+
+            if "endTime" not in d:
+                d["endTime"] = -1
+
+        with open(self.alignment_output, "w") as alf:
+            for elem in word_dict:
+                ln = f"{elem['speaker']}\t{elem['speaker_name']}\t{elem['startTime']}\t{elem['endTime']}\t{elem['word']}\n"
+                alf.write(ln)
 
     @classmethod
     def register(cls, parser: argparse.ArgumentParser):
@@ -114,8 +150,20 @@ class ILSPASRClient:
         parser.add_argument(
             "--streaming", action="store_true", help="Use streaming transcription"
         )
+        parser.add_argument(
+            "--streaming-output", action="store_true", help="Print streaming output"
+        )
+        parser.add_argument(
+            "--alignment-output",
+            type=str,
+            default=None,
+            help="Path to write the alignment csv",
+        )
         parser.add_argument("--host", type=str, default="localhost", help="Server host")
         parser.add_argument("--port", type=int, default=50051, help="Server port")
+        parser.add_argument(
+            "--chunk-size", type=int, default=200, help="Chunk size for wav recognition"
+        )
         # TODO: Add meaningful support for other configurations
 
         return parser
@@ -130,7 +178,12 @@ def transcribe_wav():
     )
     parser = ILSPASRClient.register(parser)
     args = parser.parse_args()
-    cli = ILSPASRClient(host=args.host, port=args.port)
+    cli = ILSPASRClient(
+        host=args.host,
+        port=args.port,
+        streaming_output=args.streaming_output,
+        alignment_output=args.alignment_output,
+    )
 
     if args.streaming:
         cli.recognize_streaming_wav(args.wav)
