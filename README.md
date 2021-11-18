@@ -5,7 +5,7 @@ This is a modern alternative for deploying Speech Recognition models developed u
 Features:
 
 - Standardized API. We use a modified version of [Jarvis proto files](https://github.com/NVIDIA/speechsquad/blob/master/server/proto/jarvis_asr.proto#L53), which mimic the Google speech API.
-  This allows for easy switching between Gloud speech recognizers and custom models developed with Kaldi
+This allows for easy switching between Gloud speech recognizers and custom models developed with Kaldi
 - Fully pythonic implementation. We utilize [pykaldi bindings](https://github.com/pykaldi/pykaldi) to interface with Kaldi programmatically. This allows for a clean, customizable and extendable implementation
 - Fully bidirectional streaming using HTTP/2 (gRPC). Binary speech segments are streamed to the server and partial hypotheses are streamed back to the client
 - Transcribe arbitrarily long speech
