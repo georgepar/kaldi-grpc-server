@@ -5,7 +5,7 @@ This is a modern alternative for deploying Speech Recognition models developed u
 Features:
 
 - Standardized API. We use a modified version of [Jarvis proto files](https://github.com/NVIDIA/speechsquad/blob/master/server/proto/jarvis_asr.proto#L53), which mimic the Google speech API.
- This allows for easy switching between Gloud speech recognizers and custom models developed with Kaldi
+  This allows for easy switching between Gloud speech recognizers and custom models developed with Kaldi
 - Fully pythonic implementation. We utilize [pykaldi bindings](https://github.com/pykaldi/pykaldi) to interface with Kaldi programmatically. This allows for a clean, customizable and extendable implementation
 - Fully bidirectional streaming using HTTP/2 (gRPC). Binary speech segments are streamed to the server and partial hypotheses are streamed back to the client
 - Transcribe arbitrarily long speech
@@ -64,7 +64,20 @@ And you can run the container
 ```
 # Run your container for maximum 3 simultaneous clients on port 1234
 make run-server image_tag=kaldigrpc:en-latest max_workers=3 server_port=1234
+```
 
+#### Example with Chime6 model
+
+```
+# Setup Chime6 data files
+./server/chime6_example/setup.sh
+
+# Build and run using the Chime6 model
+make build-server kaldi_model=./server/chime6_example/model image_tag=kaldigrpc:chime6-latest
+make run-server image_tag=kaldigrpc:chime6-latest max_workers=3 server_port=1234
+
+#(Optional) Purge Chime6 data files if desired
+./server/chime6_example/reset.sh
 ```
 
 ### Client usage
@@ -78,16 +91,14 @@ pip install kaldigrpc-client
 Run client from command line:
 
 ```
-kaldigrpc-transcribe --streaming --host localhost --port 50051 mytest.wav
+kaldigrpc-transcribe --streaming --host localhost --port 1234 mytest.wav
 ```
-
 
 For more infomation refer to `client/README.md`
 
 ### RNNLM Rescoring
 
 TODO: Write documentation
-
 
 ### Roadmap
 
