@@ -129,3 +129,27 @@ dmypy.json
 .pyre/
 
 model/*
+
+# Chime6 example
+final.mdl
+global_cmvn.stats
+HCLG.fst
+words.txt
+
+final.ie
+final.dubm
+final.mat
+splice_opts
+online_cmvn_iextractor
+online_cmvn.conf
+
+ivector_extractor.conf
+mfcc.conf
+online.conf
+online_cmvn.conf
+splice.conf
+
+ivector_extractor/
+conf/
+chime6_model/
+*.tar.gz 
