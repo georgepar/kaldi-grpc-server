@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "kaldigrpc_client"
-version = "0.4.0"
+version = "0.4.1"
 description = "Python client for Kaldi GRPC server"
 license = "MIT"
 repository = "https://github.com/georgepar/kaldi-grpc-server"
