@@ -1,13 +1,14 @@
-import argparse
 import os
 from dataclasses import dataclass
 from typing import Optional
+import random
 
 from kaldi.decoder import LatticeFasterDecoderOptions
-from kaldi.nnet3 import NnetSimpleLoopedComputationOptions
+from kaldi.nnet3 import NnetSimpleLoopedComputationOptions, NnetSimpleComputationOptions
 from kaldi.online2 import (OnlineEndpointConfig,
                            OnlineNnetFeaturePipelineConfig,
                            OnlineNnetFeaturePipelineInfo)
+from kaldi.segmentation import NnetSAD, SegmentationProcessor
 from kaldi.util.options import ParseOptions
 
 
@@ -172,6 +173,72 @@ class AsrConfig:
 
         return cfg, args
 
+@dataclass
+class SadModelConfig:
+    finalraw: str = "/kaldigrpc/SAD_model"
+    postoutput: str = "/kaldigrpc/SAD_model"
+    wavscp: str = "/kaldigrpc/SAD_model"
+
+    @classmethod
+    def register(cls, po: ParseOptions):
+        po.register_str("model_dir", "/kaldigrpc/SAD_model", "Path to SAD model")
+
+    @classmethod
+    def from_opts(cls, po: ParseOptions):
+        opts = po._get_options()
+        model_dir = opts.str_map["model_dir"]
+
+        return cls(
+            os.path.join(model_dir, "final.raw"),
+            os.path.join(model_dir, "post_output.vec"),
+            os.path.join(model_dir, "wav.scp")
+        )
+
+@dataclass
+class SadConfig:
+    transform: NnetSAD
+    graph: NnetSAD
+    sad: NnetSAD
+    seg: SegmentationProcessor
+    decodable: NnetSimpleComputationOptions
+    model: SadModelConfig
+    feats_rspec: str
+
+    @classmethod
+    def parse_options(cls, po: Optional[ParseOptions]):
+        SadModelConfig.register(po)
+        model_cfg = SadModelConfig.from_opts(po)
+
+        model = NnetSAD.read_model(model_cfg.finalraw)
+        post = NnetSAD.read_average_posteriors(model_cfg.postoutput)
+        transform = NnetSAD.make_sad_transform(post)
+        graph = NnetSAD.make_sad_graph()
+        decodable_opts = NnetSimpleComputationOptions()
+        decodable_opts.extra_left_context = 79
+        decodable_opts.extra_right_context = 21
+        decodable_opts.extra_left_context_initial = 0
+        decodable_opts.extra_right_context_final = 0
+        decodable_opts.frames_per_chunk = 150
+        decodable_opts.acoustic_scale = 0.3
+        sad = NnetSAD(model, transform, graph, decodable_opts=decodable_opts)
+        seg = SegmentationProcessor(target_labels=[2])
+        feats_rspec = "ark:compute-mfcc-feats --config=../SAD_model/mfcc.conf scp:../SAD_model/wav.scp ark:- |"
+        decodable_opts.register(po)
+        args = po.parse_args()
+        
+        po.print_config()
+
+        cfg = cls(
+            transform,
+            graph,
+            sad,
+            seg,
+            decodable_opts,
+            model_cfg,
+            feats_rspec
+        )
+
+        return cfg, args
 
 if __name__ == "__main__":
     cfg = AsrConfig.parse_options()

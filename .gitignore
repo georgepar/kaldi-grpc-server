@@ -130,7 +130,7 @@ dmypy.json
 
 model/*
 
-# Chime6 example
+# Chime6 ASR example
 final.mdl
 global_cmvn.stats
 HCLG.fst
@@ -153,3 +153,10 @@ ivector_extractor/
 conf/
 chime6_model/
 *.tar.gz 
+
+# Chime6 SAD system
+SAD_model/
+final.raw
+post_output.vec
+wav.scp
+*.wav
