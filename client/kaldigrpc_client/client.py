@@ -73,7 +73,7 @@ class ILSPASRClient:
 
         return self.connection.Recognize(req)
 
-     def streaming_recognize_requests(self, requests: Iterator[msg.StreamingRecognizeRequest]):
+    def streaming_recognize_requests(self, requests: Iterator[msg.StreamingRecognizeRequest]):
         for res in self.connection.StreamingRecognize(requests()):
             yield res
     
