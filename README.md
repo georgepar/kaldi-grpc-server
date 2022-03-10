@@ -73,6 +73,14 @@ Instructions:
     ./asr.sif --help
     ```
 
+**Note**: You can also modify the `.def` file and `build-singularity.sh` so that the singularity container does not include / expect the model at build time, in order to build a more flexible container.
+Then you can do something like
+
+```
+./asr.sif --model_dir=$MY_LOCAL_MODEL --wav=$MYTEST.wav
+./asr.sif --model_dir=$MY_OTHER_LOCAL_MODEL --wav=$MYTEST.wav
+```
+
 ### Dockerized server deployment
 
 Once you create this model structure, you can use the provided Dockerfile to build the server container. Run:
