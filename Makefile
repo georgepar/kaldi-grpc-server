@@ -20,6 +20,11 @@ build-server:
 	# approach
 	cd server && ./build-docker.sh $(kaldi_model) $(image_tag)
 
+build-singularity:
+	# Due to the overhead of installing kaldi / pykaldi, containerized build is the most sane
+	# approach
+	cd server && ./build-singularity.sh $(kaldi_model) $(image_tag)
+
 run-server:
 	docker run -p $(server_port):$(server_port) -ti $(image_tag) --port=$(server_port) --max-workers=$(max_workers)
 

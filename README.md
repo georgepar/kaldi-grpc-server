@@ -50,6 +50,29 @@ The key files / directories are:
 - `words.txt`: Vocabulary file, mapping words to integers
 - `ivector_extractor`: Model trained to extract ivector features (used for tdnn / chain models)
 
+
+### Build Binary ASR recognizer (singularity)
+
+We provide the option to build a (for all intents and purposes) binary file using the kaldi bindings through [singularity containers](https://sylabs.io/guides/3.0/user-guide/quick_start.html).
+In short, singularity containers build a fakeroot filesystem into a single, executable file. For more info check the documentation.
+
+Instructions:
+
+- Install singularity on your machine. [Instructions here](https://sylabs.io/guides/3.0/user-guide/quick_start.html)
+- Build the container
+    ```
+    make build-singularity kaldi_model=$MY_MODEL_DIR image_tag=asr
+    # Do not include special characters like : in the image_tag argument because this will be the path to the container file
+    ```
+- Run the container with
+    ```
+    ./asr.sif --beam=11 --streaming --wav=$MYTEST.wav
+    ```
+- For more options run
+    ```
+    ./asr.sif --help
+    ```
+
 ### Dockerized server deployment
 
 Once you create this model structure, you can use the provided Dockerfile to build the server container. Run:

@@ -1,0 +1,21 @@
+Bootstrap: docker
+From: georgepar/kaldi-grpc-base:latest
+
+%files
+    ./ /kaldigrpc/
+
+%post
+    sed -i 's/^\(--mfcc-config=\).*/\1\/kaldigrpc\/model\/conf\/mfcc.conf/' /kaldigrpc/model/conf/online.conf
+    sed -i 's/^\(--ivector-extraction-config=\).*/\1\/kaldigrpc\/model\/conf\/ivector_extractor.conf/' /kaldigrpc/model/conf/online.conf
+    sed -i 's/^\(--cmvn-config=\).*/\1\/kaldigrpc\/model\/conf\/online_cmvn.conf/' /kaldigrpc/model/conf/online.conf
+    sed -i 's/^\(--global-cmvn-stats=\).*/\1\/kaldigrpc\/model\/global_cmvn.stats/' /kaldigrpc/model/conf/online.conf
+    sed -i 's/^\(--splice-config=\).*/\1\/kaldigrpc\/model\/conf\/splice.conf/' /kaldigrpc/model/conf/ivector_extractor.conf
+    sed -i 's/^\(--cmvn-config=\).*/\1\/kaldigrpc\/model\/conf\/online_cmvn.conf/' /kaldigrpc/model/conf/ivector_extractor.conf
+    sed -i 's/^\(--lda-matrix=\).*/\1\/kaldigrpc\/model\/ivector_extractor\/final.mat/' /kaldigrpc/model/conf/ivector_extractor.conf
+    sed -i 's/^\(--global-cmvn-stats=\).*/\1\/kaldigrpc\/model\/ivector_extractor\/global_cmvn.stats/' /kaldigrpc/model/conf/ivector_extractor.conf
+    sed -i 's/^\(--diag-ubm=\).*/\1\/kaldigrpc\/model\/ivector_extractor\/final.dubm/' /kaldigrpc/model/conf/ivector_extractor.conf
+    sed -i 's/^\(--ivector-extractor=\).*/\1\/kaldigrpc\/model\/ivector_extractor\/final.ie/' /kaldigrpc/model/conf/ivector_extractor.conf
+
+
+%runscript
+    python /kaldigrpc/kaldigrpc/recognize.py --model_dir=/kaldigrpc/model $@
