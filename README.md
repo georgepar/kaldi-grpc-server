@@ -61,24 +61,24 @@ Instructions:
 - Install singularity on your machine. [Instructions here](https://sylabs.io/guides/3.0/user-guide/quick_start.html)
 - Build the container
     ```
-    make build-singularity kaldi_model=$MY_MODEL_DIR image_tag=asr
+    make build-singularity kaldi_model=$MY_MODEL_DIR image_tag=myasr
     # Do not include special characters like : in the image_tag argument because this will be the path to the container file
     ```
 - Run the container with
     ```
-    ./asr.sif --beam=11 --streaming --wav=$MYTEST.wav
+    ./containers/myasr.sif --beam=11 --streaming --wav=$MYTEST.wav
     ```
 - For more options run
     ```
-    ./asr.sif --help
+    ./containers/myasr.sif --help
     ```
 
-**Note**: You can also modify the `.def` file and `build-singularity.sh` so that the singularity container does not include / expect the model at build time, in order to build a more flexible container.
+**Note**: You can also use the command `make build-flex-singularity` so that the singularity container does not include / expect the model at build time, in order to build a more flexible container that can run any local model.
 Then you can do something like
 
 ```
-./asr.sif --model_dir=$MY_LOCAL_MODEL --wav=$MYTEST.wav
-./asr.sif --model_dir=$MY_OTHER_LOCAL_MODEL --wav=$MYTEST.wav
+./containers/asr.sif --model_dir=$MY_LOCAL_MODEL --wav=$MYTEST.wav
+./containers/asr.sif --model_dir=$MY_OTHER_LOCAL_MODEL --wav=$MYTEST.wav
 ```
 
 ### Dockerized server deployment

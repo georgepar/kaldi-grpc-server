@@ -23,7 +23,12 @@ build-server:
 build-singularity:
 	# Due to the overhead of installing kaldi / pykaldi, containerized build is the most sane
 	# approach
-	cd server && ./build-singularity.sh $(kaldi_model) $(image_tag)
+	cd server && ./build-singularity.sh $(kaldi_model) $(image_tag) && cp $(image_tag).sif ../containers/
+
+build-flex-singularity:
+	# Build singularity container without preinstalled model
+	cd server && singularity build --notest --fakeroot asr.sif asr-flex-singularity.def && cp asr.sif ../containers/
+
 
 run-server:
 	docker run -p $(server_port):$(server_port) -ti $(image_tag) --port=$(server_port) --max-workers=$(max_workers)
