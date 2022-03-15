@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from typing import Iterator, List, Optional, Tuple
 
 import loguru
-
 from kaldi.asr import (LatticeRnnlmPrunedRescorer,
                        NnetLatticeFasterOnlineRecognizer)
 from kaldi.fstext import SymbolTable
@@ -91,25 +90,29 @@ class KaldiRecognizer:
                 end_time=get_time(i, times, st=False),
                 word=self.asr.symbols.find_symbol(w),
             )
-
             for i, w in enumerate(words)
         ]
 
     def _mbr_transcription(self, mbr: MinimumBayesRisk) -> Transcription:
         confidences = mbr.get_one_best_confidences()
-        confidence = sum(confidences) / len(confidences)
-        mbr_trans = " ".join(
-            [self.asr.symbols.find_symbol(i) for i in mbr.get_one_best()]
-        )
+        if confidences and len(confidences) > 0:
 
-        transcript = Transcription(
-            mbr_trans,
-            confidence,
-            self._words_from_indices(
-                mbr.get_one_best(), times=mbr.get_one_best_times()
-            ),
-            is_final=True,
-        )
+            confidence = sum(confidences) / len(confidences)
+
+            mbr_trans = " ".join(
+                [self.asr.symbols.find_symbol(i) for i in mbr.get_one_best()]
+            )
+
+            transcript = Transcription(
+                mbr_trans,
+                confidence,
+                self._words_from_indices(
+                    mbr.get_one_best(), times=mbr.get_one_best_times()
+                ),
+                is_final=True,
+            )
+        else:
+            transcript = Transcription("", 0.0, [], is_final=True)
 
         return transcript
 
