@@ -4,12 +4,13 @@ from queue import Queue
 from threading import Lock
 
 import grpc
+from kaldi.util.options import ParseOptions
+from loguru import logger
+
 import kaldigrpc.generated.asr_pb2 as msg
 import kaldigrpc.generated.asr_pb2_grpc as rpc
-from kaldi.util.options import ParseOptions
 from kaldigrpc.config import AsrConfig
 from kaldigrpc.recognize import KaldiRecognizer
-from loguru import logger
 
 _ONE_DAY_IN_SECONDS = 60 * 60 * 24
 
@@ -53,6 +54,7 @@ class ILSPASRService(rpc.ILSPASRServicer):
 
     def _construct_alternatives(self, result):
         if result.is_final:
+            logger.log("INFO", "Final result. Constructing alternative")
             alt = msg.SpeechRecognitionAlternative(
                 transcript=result.transcript,
                 confidence=result.confidence,
@@ -64,20 +66,25 @@ class ILSPASRService(rpc.ILSPASRServicer):
                 ],
             )
         else:
+            logger.log("INFO", "Not final yet. Partial result")
             alt = msg.SpeechRecognitionAlternative(transcript=result.transcript)
 
         return [alt]
 
     def Recognize(self, request, context):
+        logger.log("INFO", "Server.Recognize: Batch recognition endpoint")
         metadata = dict(context.invocation_metadata())
         print(metadata)
         config = request.config
         print(config)
 
+        logger.log("INFO", "Server.Recognize: Get next available worker from queue")
         asr = self.recognizers.get(
             block=True, timeout=None
         )  # Block until a recognizer becomes available
+        logger.log("INFO", "Server.Recognize: Recognition started")
         result = asr.recognize(request.audio)
+        logger.log("INFO", "Server.Recognize: Recognition finished")
 
         res = msg.SpeechRecognitionResult(
             alternatives=self._construct_alternatives(result),
@@ -85,10 +92,14 @@ class ILSPASRService(rpc.ILSPASRServicer):
             audio_processed=0,  # FIXME: Do not return audio duration for now
         )
         resp = msg.RecognizeResponse(results=[res])
+        logger.log("INFO", "Server.Recognize: Put worker back into the queue")
         self.recognizers.put(asr)  # Reinsert into the queue
+        logger.log("INFO", "Server.Recognize: Return response to client")
         return resp
 
     def StreamingRecognize(self, request_iterator, context):
+        logger.log("INFO", "Server.StreamingRecognize: Streaming recognition endpoint")
+
         def stream():
             while True:
                 try:
@@ -102,10 +113,14 @@ class ILSPASRService(rpc.ILSPASRServicer):
                 else:
                     yield req.audio_content
 
+        logger.log(
+            "INFO", "Server.StreamingRecognize: Get next available worker from queue"
+        )
         asr = self.recognizers.get(
             block=True, timeout=None
         )  # Block until a recognizer becomes available
 
+        logger.log("INFO", "Server.StreamingRecognize: Iterating over requests")
         for result in asr.recognize_stream(stream()):
             res = msg.StreamingRecognitionResult(
                 alternatives=self._construct_alternatives(result),
@@ -113,11 +128,16 @@ class ILSPASRService(rpc.ILSPASRServicer):
                 channel_tag=0,
                 audio_processed=0,
             )
+            logger.log(
+                "INFO",
+                "Server.StreamingRecognize: Processed chunk. Returning partial result to client",
+            )
 
             resp = msg.StreamingRecognizeResponse(results=[res])
 
             yield resp
 
+        logger.log("INFO", "Server.StreamingRecognize: Put worker back into the queue")
         self.recognizers.put(asr)  # Reinsert into the queue
 
 

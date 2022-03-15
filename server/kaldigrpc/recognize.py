@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from typing import Iterator, List, Optional, Tuple
 
-import loguru
 from kaldi.asr import (LatticeRnnlmPrunedRescorer,
                        NnetLatticeFasterOnlineRecognizer)
 from kaldi.fstext import SymbolTable
@@ -10,6 +9,8 @@ from kaldi.online2 import (OnlineIvectorExtractorAdaptationState,
                            OnlineNnetFeaturePipeline, OnlineSilenceWeighting)
 from kaldi.rnnlm import RnnlmComputeStateComputationOptions
 from kaldi.util.options import ParseOptions
+from loguru import logger
+
 from kaldigrpc.config import AsrConfig
 from kaldigrpc.util import timefn, timegen
 from kaldigrpc.wav import bytes2vector
@@ -41,6 +42,7 @@ class KaldiRecognizer:
             decodable_opts=self.config.decodable,
             endpoint_opts=self.config.endpoint,
         )
+        logger.log("INFO", "Initialized KaldiRecognizer")
 
     @classmethod
     def register(cls, po: ParseOptions):
@@ -48,9 +50,12 @@ class KaldiRecognizer:
         po.register_bool("streaming", False, "Use streaming online recognizer")
 
     def _load_rnnlm(self) -> Optional[LatticeRnnlmPrunedRescorer]:
+
         if not self.config.rnnlm.use_rnnlm:
+            logger.log("INFO", "use_rnnlm=False. Not loading RNNLM")
             return None
 
+        logger.log("INFO", "Beggining to load RNNLM")
         word_embedding_rxfilename = "rnnlm-get-word-embedding %s %s - |" % (
             self.config.rnnlm.word_feats,
             self.config.rnnlm.feat_embedding,
@@ -71,6 +76,7 @@ class KaldiRecognizer:
             lm_scale=0.2,
         )
 
+        logger.log("INFO", "Loaded RNNLM rescorer")
         return rescorer
 
     def _words_from_indices(
@@ -84,6 +90,7 @@ class KaldiRecognizer:
 
                 return times[i][idx]
 
+        logger.log("INFO", "Making word list [{word, st, et}]")
         return [
             WordInfo(
                 start_time=get_time(i, times, st=True),
@@ -94,7 +101,9 @@ class KaldiRecognizer:
         ]
 
     def _mbr_transcription(self, mbr: MinimumBayesRisk) -> Transcription:
+        logger.log("INFO", "Getting MBR confidences")
         confidences = mbr.get_one_best_confidences()
+        logger.log("INFO", f"MBR Confidences = {confidences}")
         if confidences and len(confidences) > 0:
 
             confidence = sum(confidences) / len(confidences)
@@ -111,7 +120,9 @@ class KaldiRecognizer:
                 ),
                 is_final=True,
             )
+            logger.log("INFO", "Constructed MBR transcription")
         else:
+            logger.log("INFO", "MBR transcription empty. Returning empty string")
             transcript = Transcription("", 0.0, [], is_final=True)
 
         return transcript
@@ -119,19 +130,25 @@ class KaldiRecognizer:
     @timefn(method=True)
     def recognize(self, wavbytes: bytes) -> Transcription:
         # Decode (whole utterance)
+        logger.log("INFO", "Batch recognize started")
         wav = bytes2vector(wavbytes, self.config.audio)
         feat_pipeline = OnlineNnetFeaturePipeline(self.config.feat)
         self.asr.set_input_pipeline(feat_pipeline)
         rescorer = self._load_rnnlm()
         feat_pipeline.accept_waveform(self.config.audio.frame_rate, wav)
         feat_pipeline.input_finished()
+        logger.log("INFO", "Extracted features for input wav")
+        logger.log("INFO", "Starting decoding")
         out = self.asr.decode()
+        logger.log("INFO", "Decoding finished")
 
         rescored_lat = out["lattice"]
 
         if rescorer is not None:
+            logger.log("INFO", "Rescoring Lattice")
             rescored_lat = rescorer.rescore(out["lattice"])
 
+        logger.log("INFO", "Starting MBR lattice rescoring")
         mbr = MinimumBayesRisk(rescored_lat)
         transcript = self._mbr_transcription(mbr)
 
@@ -139,6 +156,7 @@ class KaldiRecognizer:
 
     @timegen(method=True)
     def recognize_stream(self, chunks: Iterator[bytes]) -> Iterator[Transcription]:
+        logger.log("INFO", "Streaming recognize started")
         # Decode (chunked + partial output)
         adaptation_state = OnlineIvectorExtractorAdaptationState.from_info(
             self.config.feat.ivector_extractor_info
@@ -159,34 +177,49 @@ class KaldiRecognizer:
 
         last_chunk = False
         prev_num_frames_decoded = 0
+        logger.log("INFO", "Initialized Feature, Silence and Adaptation pipelines")
 
         while True:
             try:
+                logger.log("INFO", "Getting next chunk of input stream")
                 chunk_bytes = next(chunks)
                 chunk = bytes2vector(chunk_bytes, self.config.audio)
+                logger.log(
+                    "INFO", "Got next chunk. Proceed to advancing decoding state"
+                )
             except StopIteration:
+                logger.log("INFO", "No more chunks. Proceeding to finalize decoding")
                 last_chunk = True
 
             if last_chunk:
+                logger.log("INFO", "Last Chunk. Gracefully finalize decoding")
+                logger.log("INFO", "Feature pipeline input finished")
                 feat_pipeline.input_finished()
 
+                logger.log("INFO", "Finalizing decoding")
                 self.asr.finalize_decoding()
+                logger.log("INFO", "Finalized decoding")
                 out = self.asr.get_output()
 
                 rescored_lat = out["lattice"]
 
                 if rescorer is not None:
+                    logger.log("INFO", "Rescoring Lattice")
                     rescored_lat = rescorer.rescore(out["lattice"])
 
+                logger.log("INFO", "Starting MBR lattice rescoring")
                 mbr = MinimumBayesRisk(rescored_lat)
                 transcript = self._mbr_transcription(mbr)
                 yield transcript
 
                 break
 
+            logger.log("INFO", "New chunk")
             feat_pipeline.accept_waveform(self.config.audio.frame_rate, chunk)
+            logger.log("INFO", "Accepted feat_pipeline waveform")
 
             if silence_weighting.active():
+                logger.log("INFO", "Weighting silence")
                 silence_weighting.compute_current_traceback(self.asr.decoder)
                 feat_pipeline.ivector_feature().update_frame_weights(
                     silence_weighting.get_delta_weights(
@@ -194,12 +227,15 @@ class KaldiRecognizer:
                     )
                 )
 
+            logger.log("INFO", "Advancing decoder state")
             self.asr.advance_decoding()
             num_frames_decoded = self.asr.decoder.num_frames_decoded()
 
             if num_frames_decoded > prev_num_frames_decoded:
+                logger.log("INFO", "New decoded frames")
                 prev_num_frames_decoded = num_frames_decoded
                 out = self.asr.get_partial_output()
+                logger.log("INFO", "Extracted partial output")
 
                 transcript = Transcription(
                     out["text"],
@@ -207,6 +243,7 @@ class KaldiRecognizer:
                     self._words_from_indices(out["words"]),
                     is_final=False,
                 )
+                logger.log("INFO", "Send partial output to client")
                 yield transcript
 
     def recognize_wav(self, wav_file):
