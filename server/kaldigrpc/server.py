@@ -4,13 +4,12 @@ from queue import Queue
 from threading import Lock
 
 import grpc
-from loguru import logger
-
 import kaldigrpc.generated.asr_pb2 as msg
 import kaldigrpc.generated.asr_pb2_grpc as rpc
 from kaldi.util.options import ParseOptions
 from kaldigrpc.config import AsrConfig
 from kaldigrpc.recognize import KaldiRecognizer
+from loguru import logger
 
 _ONE_DAY_IN_SECONDS = 60 * 60 * 24
 
@@ -61,7 +60,6 @@ class ILSPASRService(rpc.ILSPASRServicer):
                     msg.WordInfo(
                         start_time=w.start_time, end_time=w.end_time, word=w.word
                     )
-
                     for w in result.words
                 ],
             )
@@ -75,7 +73,10 @@ class ILSPASRService(rpc.ILSPASRServicer):
         print(metadata)
         config = request.config
         print(config)
-        asr = self.recognizers.round_robin()  # KaldiRecognizer(self.asr_config)
+
+        asr = self.recognizers.get(
+            block=True, timeout=None
+        )  # Block until a recognizer becomes available
         result = asr.recognize(request.audio)
 
         res = msg.SpeechRecognitionResult(
@@ -84,7 +85,7 @@ class ILSPASRService(rpc.ILSPASRServicer):
             audio_processed=0,  # FIXME: Do not return audio duration for now
         )
         resp = msg.RecognizeResponse(results=[res])
-
+        self.recognizers.put(asr)  # Reinsert into the queue
         return resp
 
     def StreamingRecognize(self, request_iterator, context):
