@@ -1,12 +1,14 @@
 from dataclasses import dataclass
 from typing import Iterator, List, Optional, Tuple
-
-from kaldi.asr import (LatticeRnnlmPrunedRescorer,
-                       NnetLatticeFasterOnlineRecognizer)
+import gc
+from kaldi.asr import LatticeRnnlmPrunedRescorer, NnetLatticeFasterOnlineRecognizer
 from kaldi.fstext import SymbolTable
 from kaldi.lat.sausages import MinimumBayesRisk
-from kaldi.online2 import (OnlineIvectorExtractorAdaptationState,
-                           OnlineNnetFeaturePipeline, OnlineSilenceWeighting)
+from kaldi.online2 import (
+    OnlineIvectorExtractorAdaptationState,
+    OnlineNnetFeaturePipeline,
+    OnlineSilenceWeighting,
+)
 from kaldi.rnnlm import RnnlmComputeStateComputationOptions
 from kaldi.util.options import ParseOptions
 from loguru import logger
@@ -14,6 +16,10 @@ from loguru import logger
 from kaldigrpc.config import AsrConfig
 from kaldigrpc.util import timefn, timegen
 from kaldigrpc.wav import bytes2vector
+
+
+class TimeoutException(Exception):  # Custom exception class
+    pass
 
 
 @dataclass
@@ -42,6 +48,7 @@ class KaldiRecognizer:
             decodable_opts=self.config.decodable,
             endpoint_opts=self.config.endpoint,
         )
+        self.feat_pipeline = None
         logger.log("INFO", "Initialized KaldiRecognizer")
 
     @classmethod
@@ -154,6 +161,22 @@ class KaldiRecognizer:
 
         return transcript
 
+    def graceful_lattice_shutdown(self):
+        logger.log("INFO", "Last Chunk. Gracefully finalize decoding")
+        logger.log("INFO", "Feature pipeline input finished")
+        try:
+            self.feat_pipeline.input_finished()
+        except Exception as e:
+            print(e)
+            logger.log("Cannot gracefully shut down feat_pipeline. Hope this is not a mem leak")
+        logger.log("INFO", "Finalizing decoding")
+        try:
+            self.asr.finalize_decoding()
+        except Exception as e:
+            print(e)
+            logger.log("Cannot gracefully shut down decoder. Hope this is not a mem leak")
+        gc.collect()
+
     @timegen(method=True)
     def recognize_stream(self, chunks: Iterator[bytes]) -> Iterator[Transcription]:
         logger.log("INFO", "Streaming recognize started")
@@ -164,6 +187,7 @@ class KaldiRecognizer:
         rescorer = self._load_rnnlm()
 
         feat_pipeline = OnlineNnetFeaturePipeline(self.config.feat)
+        self.feat_pipeline = feat_pipeline
         feat_pipeline.set_adaptation_state(adaptation_state)
 
         self.asr.set_input_pipeline(feat_pipeline)
@@ -190,6 +214,9 @@ class KaldiRecognizer:
             except StopIteration:
                 logger.log("INFO", "No more chunks. Proceeding to finalize decoding")
                 last_chunk = True
+            # except TimeoutException:
+            #    logger.log("INFO", "Timeout. ending transcription now")
+            #    last_chunk = True
 
             if last_chunk:
                 logger.log("INFO", "Last Chunk. Gracefully finalize decoding")

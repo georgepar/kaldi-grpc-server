@@ -5,7 +5,8 @@ SHELL ["/bin/bash", "-c"]
 COPY . /kaldigrpc
 WORKDIR /kaldigrpc
 
-RUN apt-get update -y && \
+RUN mkdir /data && \
+    apt-get update -y && \
     apt-get install -y python3-pip && \
     ln -s /usr/bin/python3 /usr/bin/python && \
     pip3 install poetry && \

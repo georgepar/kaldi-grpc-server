@@ -31,7 +31,7 @@ build-flex-singularity:
 
 
 run-server:
-	docker run -p $(server_port):$(server_port) -ti $(image_tag) --port=$(server_port) --max-workers=$(max_workers)
+	docker run -p $(server_port):$(server_port) -ti $(image_tag) --port=$(server_port) --max-workers=$(max_workers) --beam=$(beam)
 
 build-client:
 	cd client && poetry install && poetry build
