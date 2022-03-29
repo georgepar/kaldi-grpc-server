@@ -17,7 +17,6 @@ class ILSPASRClient:
         secure: bool = False,
         chunk_size: int = 200,
         streaming_output: bool = False,
-        alignment_output: Optional[str] = None,
         encoding: str = "LINEAR16",
         sample_rate_hertz: int = 16000,
         language_code: str = "el-GR",
@@ -47,7 +46,6 @@ class ILSPASRClient:
             config=self.recognition_config, interim_results=interim_results
         )
         self.streaming_output = streaming_output
-        self.alignment_output = alignment_output
         self.chunk_size = chunk_size
 
         if not secure:
@@ -102,6 +100,7 @@ class ILSPASRClient:
         res = self.recognize(AudioSegment.from_file(wav_file).raw_data)
 
         print(res.results[0].alternatives[0].transcript)
+        return res
 
     def recognize_streaming_wav(self, wav_file: str):
         from pydub import AudioSegment
@@ -115,27 +114,71 @@ class ILSPASRClient:
 
         recognizer_outputs = self.streaming_recognize(wav_iter())
 
+        response = None
+
         while True:
             try:
-                result = next(recognizer_outputs)
+                response = next(recognizer_outputs)
 
                 if self.streaming_output:
-                    print(result.results[0].alternatives[0].transcript, end="\r")
+                    print(response.results[0].alternatives[0].transcript, end="\r")
 
             except StopIteration:
                 break
 
-        print(result.results[0].alternatives[0].transcript)
+        if response is not None:
+            print(response.results[0].alternatives[0].transcript)
 
-        if self.alignment_output is not None:
-            self.write_alignments(result)
+        return response
+
+    def write_srt(self, response, out_srt, max_chars=40):
+        import srt
+
+        subs = []
+        for result in response.results:
+            alternative = result.alternatives[0]
+            firstword = True
+            charcount = 0
+            idx = len(subs) + 1
+            content = ""
+
+            for w in alternative.words:
+                if firstword:
+                    # first word in sentence, record start time
+                    start = w.start_time.ToTimedelta()
+                if (
+                    "." in w.word
+                    or "!" in w.word
+                    or "?" in w.word
+                    or charcount > max_chars
+                    or ("," in w.word and not firstword)
+                ):
+                    # break sentence at: . ! ? or line length exceeded
+                    # also break if , and not first word
+                    subs.append(
+                        srt.Subtitle(
+                            index=idx,
+                            start=start,
+                            end=w.end_time.ToTimedelta(),
+                            content=srt.make_legal_content(content),
+                        )
+                    )
+                    firstword = True
+                    idx += 1
+                    content = ""
+                    charcount = 0
+                else:
+                    firstword = False
+
+        with open(out_srt, "w") as f:
+            f.writelines(srt.compose(subs))
 
     def write_alignments(self, result):
         result_dict = MessageToDict(result)
 
-        word_dict = result_dict["results"][0]["alternatives"][0]["words"]
+        word_list = result_dict["results"][0]["alternatives"][0]["words"]
 
-        for d in word_dict:
+        for d in word_list:
             d["speaker"] = "speakerID"
             d["speaker_name"] = "Anonymous"
 
@@ -145,8 +188,8 @@ class ILSPASRClient:
             if "endTime" not in d:
                 d["endTime"] = -1
 
-        with open(self.alignment_output, "w") as alf:
-            for elem in word_dict:
+        with open(out_csv, "w") as alf:
+            for elem in word_list:
                 ln = f"{elem['speaker']}\t{elem['speaker_name']}\t{elem['startTime']}\t{elem['endTime']}\t{elem['word']}\n"
                 alf.write(ln)
 
@@ -164,6 +207,12 @@ class ILSPASRClient:
             type=str,
             default=None,
             help="Path to write the alignment csv",
+        )
+        parser.add_argument(
+            "--srt-output",
+            type=str,
+            default=None,
+            help="Path to write the srt",
         )
         parser.add_argument("--host", type=str, default="localhost", help="Server host")
         parser.add_argument("--port", type=int, default=50051, help="Server port")
@@ -188,13 +237,18 @@ def transcribe_wav():
         host=args.host,
         port=args.port,
         streaming_output=args.streaming_output,
-        alignment_output=args.alignment_output,
     )
 
     if args.streaming:
-        cli.recognize_streaming_wav(args.wav)
+        result = cli.recognize_streaming_wav(args.wav)
     else:
-        cli.recognize_wav(args.wav)
+        result = cli.recognize_wav(args.wav)
+
+    if args.alignment_output is not None:
+        cli.write_alignments(result, args.alignment_output)
+
+    if args.srt_output is not None:
+        cli.write_srt(result, args.srt_output)
 
 
 if __name__ == "__main__":
