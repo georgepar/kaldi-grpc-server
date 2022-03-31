@@ -1,12 +1,14 @@
 from dataclasses import dataclass
 from typing import Iterator, List, Optional, Tuple
 
-from kaldi.asr import (LatticeRnnlmPrunedRescorer,
-                       NnetLatticeFasterOnlineRecognizer)
+from kaldi.asr import LatticeRnnlmPrunedRescorer, NnetLatticeFasterOnlineRecognizer
 from kaldi.fstext import SymbolTable
 from kaldi.lat.sausages import MinimumBayesRisk
-from kaldi.online2 import (OnlineIvectorExtractorAdaptationState,
-                           OnlineNnetFeaturePipeline, OnlineSilenceWeighting)
+from kaldi.online2 import (
+    OnlineIvectorExtractorAdaptationState,
+    OnlineNnetFeaturePipeline,
+    OnlineSilenceWeighting,
+)
 from kaldi.rnnlm import RnnlmComputeStateComputationOptions
 from kaldi.util.options import ParseOptions
 from loguru import logger
@@ -14,6 +16,8 @@ from loguru import logger
 from kaldigrpc.config import AsrConfig
 from kaldigrpc.util import timefn, timegen
 from kaldigrpc.wav import bytes2vector
+
+from threading import Event
 
 
 @dataclass
@@ -42,6 +46,7 @@ class KaldiRecognizer:
             decodable_opts=self.config.decodable,
             endpoint_opts=self.config.endpoint,
         )
+        self.stop_event = Event()
         logger.log("INFO", "Initialized KaldiRecognizer")
 
     @classmethod
@@ -181,6 +186,12 @@ class KaldiRecognizer:
 
         while True:
             try:
+                if self.stop_event.is_set():
+                    logger.log(
+                        "INFO", "RPC termination. Next step: finalization of decoding"
+                    )
+                    raise StopIteration
+
                 logger.log("INFO", "Getting next chunk of input stream")
                 chunk_bytes = next(chunks)
                 chunk = bytes2vector(chunk_bytes, self.config.audio)

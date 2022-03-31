@@ -2,6 +2,7 @@ import time
 from concurrent import futures
 from queue import Queue
 from threading import Lock
+import kaldigrpc.timeout_iterator as iterators
 
 import grpc
 from kaldi.util.options import ParseOptions
@@ -99,12 +100,19 @@ class ILSPASRService(rpc.ILSPASRServicer):
 
     def StreamingRecognize(self, request_iterator, context):
         logger.log("INFO", "Server.StreamingRecognize: Streaming recognition endpoint")
+        req_iter = iterators.TimeoutIterator(request_iterator, timeout=3)
 
         def stream():
             while True:
                 try:
-                    req = next(request_iterator)
-                except:
+                    req = next(req_iter)
+                    if req is req_iter.get_sentinel():
+                        logger.log(
+                            "INFO", "Timeout has been reached. Closing stream..."
+                        )
+                        context.cancel()
+                        break
+                except StopIteration:
                     break
 
                 if not req.audio_content:
@@ -120,8 +128,25 @@ class ILSPASRService(rpc.ILSPASRServicer):
             block=True, timeout=None
         )  # Block until a recognizer becomes available
 
+        # clear the stop_event here before starting using the ASR
+        asr.stop_event.clear()
+
+        def on_rpc_done():
+            # regain servicer thread
+            asr.stop_event.set()
+
+        # add on_rpc_done as callback function when a RPC communication is terminated
+        context.add_callback(on_rpc_done)
+
         logger.log("INFO", "Server.StreamingRecognize: Iterating over requests")
         for result in asr.recognize_stream(stream()):
+
+            # block the return of a response to a closed channel
+            # and continue to the next iteration so as to
+            # force-follow the "last_chunk" path (to end ASR decoding gracefully)
+            if asr.stop_event.is_set():
+                continue
+
             res = msg.StreamingRecognitionResult(
                 alternatives=self._construct_alternatives(result),
                 is_final=result.is_final,
