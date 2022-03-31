@@ -1,4 +1,5 @@
 import argparse
+from datetime import timedelta
 from typing import Iterator, Optional
 
 import grpc
@@ -141,11 +142,16 @@ class ILSPASRClient:
             charcount = 0
             idx = len(subs) + 1
             content = ""
+            prev_end_time = 0
 
             for w in alternative.words:
                 if firstword:
                     # first word in sentence, record start time
-                    start = w.start_time.ToTimedelta()
+                    start = timedelta(seconds=(w.start_time / 33.333))
+                print(f"{w.start_time}\t{w.end_time}")
+                charcount += len(w.word)
+                content += " " + w.word.strip()
+
                 if (
                     "." in w.word
                     or "!" in w.word
@@ -159,7 +165,7 @@ class ILSPASRClient:
                         srt.Subtitle(
                             index=idx,
                             start=start,
-                            end=w.end_time.ToTimedelta(),
+                            end=timedelta(seconds=(w.end_time / 33.333)),
                             content=srt.make_legal_content(content),
                         )
                     )
@@ -169,7 +175,7 @@ class ILSPASRClient:
                     charcount = 0
                 else:
                     firstword = False
-
+                prev_end_time = w.end_time
         with open(out_srt, "w") as f:
             f.writelines(srt.compose(subs))
 
