@@ -107,7 +107,9 @@ class ILSPASRService(rpc.ILSPASRServicer):
                 try:
                     req = next(req_iter)
                     if req is req_iter.get_sentinel():
-                        logger.log("INFO", "Timeout has been reached. Closing stream...")
+                        logger.log(
+                            "INFO", "Timeout has been reached. Closing stream..."
+                        )
                         context.cancel()
                         break
                 except StopIteration:

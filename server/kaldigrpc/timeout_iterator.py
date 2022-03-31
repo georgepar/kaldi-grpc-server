@@ -1,6 +1,7 @@
 import queue
 import threading
 
+
 class TimeoutIterator:
     """
     Wrapper class to add timeout feature to synchronous iterators
@@ -15,12 +16,13 @@ class TimeoutIterator:
     Exception is raised when all elements geenerated by the actual iterator before exception have been consumed
     Timeout can be set dynamically before going for iteration
     """
+
     ZERO_TIMEOUT = 0.0
 
     def __init__(self, iterator, timeout=0.0, sentinel=object(), reset_on_next=False):
         self._iterator = iterator
         self._timeout = timeout
-        self._sentinel= sentinel
+        self._sentinel = sentinel
         self._reset_on_next = reset_on_next
 
         self._interrupt = False
