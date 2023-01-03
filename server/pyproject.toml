@@ -6,15 +6,17 @@ authors = ["Giorgos Paraskevopoulos <geopar@central.ntua.gr>"]
 
 [tool.poetry.dependencies]
 python = "^3.8"
-grpcio = "^1.39.0"
-grpcio-tools = "^1.39.0"
+grpcio = "^1.51.1"
+grpcio-tools = "^1.51.1"
 pydub = "^0.25.1"
 numpy = "^1.21.1"
 loguru = "^0.5.3"
+protobuf = "^4.21.0"
 
 [tool.poetry.dev-dependencies]
 black = "^21.7b0"
 mypy = "^0.910"
+
 
 [tool.poetry.scripts]
 kaldigrpc-serve = 'kaldigrpc.cli.serve:serve_cli'
