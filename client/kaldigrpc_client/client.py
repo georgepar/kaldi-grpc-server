@@ -179,7 +179,7 @@ def transcribe_wav():
     parser = argparse.ArgumentParser(
         """Kaldi GRPC client
         Usage:
-            python client.py --streaming --wav test.wav
+            python client.py --streaming test.wav
         """
     )
     parser = ILSPASRClient.register(parser)
