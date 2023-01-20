@@ -3,6 +3,7 @@ PYTHON=python
 
 max_workers=2
 server_port=50051
+beam=10
 
 all: depend generate-stubs
 
