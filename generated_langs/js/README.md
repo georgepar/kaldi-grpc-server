@@ -1,0 +1,1 @@
+See [https://daily.dev/blog/build-a-chat-app-using-grpc-and-reactjs](https://daily.dev/blog/build-a-chat-app-using-grpc-and-reactjs) for more details on how to generate and use the js library through React
